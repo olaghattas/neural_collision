@@ -19,8 +19,12 @@ find_package(fcl REQUIRED)
 find_package(CUDA REQUIRED)
 find_package(ros2-tiny-cuda-nn REQUIRED)
 
+set(dependencies
+        rclcpp
+        sensor_msgs
+        )
 add_executable(main src/main.cpp)
-
+ament_target_dependencies(main ${dependencies})
 
 target_link_libraries(main ${FCL_LIBRARIES})
 target_link_libraries(main ${ros2-tiny-cuda-nn_LIBRARIES})
@@ -37,7 +41,7 @@ install(TARGETS main DESTINATION lib/${PROJECT_NAME})
 
 
 install(
-    DIRECTORY config data
+    DIRECTORY config
     DESTINATION share/${PROJECT_NAME}
 )
 

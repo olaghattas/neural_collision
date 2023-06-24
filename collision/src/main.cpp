@@ -30,7 +30,6 @@
 #include <sensor_msgs/msg/point_cloud2.hpp>
 
 
-
 struct GPUData {
     GPUData(std::vector<float> data, int dim) {
         size_ = data.size();
@@ -55,12 +54,12 @@ struct GPUData {
 
     int sampleInd(int num_elements) {
         assert(size_ / dim_ - num_elements >= 0);
-        int offset = (std::rand() % (1 + size_/ dim_ - num_elements));
+        int offset = (std::rand() % (1 + size_ / dim_ - num_elements));
         return offset;
     }
 
     float *sample(int offset) {
-        return data_gpu_ + offset * dim_;
+        return (float *) (data_gpu_ + offset * dim_);
     }
 
     std::vector<float> toCPU() {
@@ -134,18 +133,22 @@ void publish_pointcloud(const std::vector<float> &features,
 
     msg->data.assign(16 * pred_targets.size(), 0);
 
-    for (int i = 0; i < pred_targets.size(); i++) {
+    for (int i = 0; i < pred_targets.size() / 2; i++) {
         float point[3] = {features[3 * i + 0], features[3 * i + 1], features[3 * i + 2]};
 
 
         memcpy(msg->data.data() + 16 * i, &point[0], 3 * sizeof(float));
 
         uint8_t color[4] = {0, 0, 0, 255};
-        if (pred_targets[i] < 0) {
-            color[1] = 255; // green
+        if (pred_targets[i * 2] < .5) {
+            color[2] = 105;
         } else {
-            color[2] = 255;
-            color[3] = 0;
+            if (pred_targets[i * 2 + 1] > 0.5)
+                color[2] = 255;
+            else {
+                color[1] = 255;
+            }
+//
         }
 //        color[1] = 128;
         memcpy(msg->data.data() + 12 + 16 * i, &color[0], 4 * sizeof(uint8_t));
@@ -175,21 +178,21 @@ int main(int argc, char *argv[]) {
 
     // load data
     auto data = read_data();
-    std::vector<float> targets(data.size());
+
     std::vector<float> features(3 * data.size());
+    std::vector<float> targets(2 * data.size());
     for (int i = 0; i < data.size(); i++) {
         auto &datpoint = data[i];
-        targets[i] = datpoint.dist;
+        targets[2 * i + 0] = datpoint.collision;
+        targets[2 * i + 1] = datpoint.door_collision;
         features[3 * i + 0] = datpoint.x;
         features[3 * i + 1] = datpoint.y;
         features[3 * i + 2] = datpoint.z;
-//        features[i + 0*targets.size()] = datpoint.x;
-//        features[i + 1*targets.size()] = datpoint.y;
-//        features[i + 2*targets.size()] = datpoint.z;
+
     }
 
     GPUData features_gpu{features, 3};
-    GPUData targets_gpu{targets, 1};
+    GPUData targets_gpu{targets, 2};
     GPUData pred_targets_gpu((int) 16 * targets.size(), 1);
 
     // load config
@@ -204,7 +207,7 @@ int main(int argc, char *argv[]) {
     // load network and cuda
     constexpr uint32_t n_input_dims = 3;
     constexpr uint32_t n_output_dims = 1;
-    uint32_t batch_size = targets.size();
+    uint32_t batch_size = targets.size() / 2;
 
     auto stream_ptr = new cudaStream_t();
     cudaStreamCreate(stream_ptr);
@@ -240,35 +243,6 @@ int main(int argc, char *argv[]) {
         auto pred_targets = pred_targets_gpu.toCPU();
         publish_pointcloud(features, pred_targets, node, pub_);
 
-    }
-
-    auto planning_scene_diff_publisher = node->create_publisher<moveit_msgs::msg::PlanningScene>("planning_scene", 10);
-    moveit_msgs::msg::PlanningScene msg_scene;
-    msg_scene.is_diff = true;
-    msg_scene.world.collision_objects.resize(1);
-    msg_scene.world.collision_objects[0].header.frame_id = "base";
-    msg_scene.world.collision_objects[0].id = "complex_shape";
-    msg_scene.world.collision_objects[0].operation = moveit_msgs::msg::CollisionObject::ADD;
-    msg_scene.world.collision_objects[0].network_poses.resize(1);
-    msg_scene.world.collision_objects[0].network_poses[0].position.x = 0;
-    msg_scene.world.collision_objects[0].network_poses[0].position.y = 0;
-    msg_scene.world.collision_objects[0].network_poses[0].position.z = 0;
-    msg_scene.world.collision_objects[0].network_poses[0].orientation.w = 1;
-    msg_scene.world.collision_objects[0].network_poses[0].orientation.x = 0;
-    msg_scene.world.collision_objects[0].network_poses[0].orientation.y = 0;
-    msg_scene.world.collision_objects[0].network_poses[0].orientation.z = 0;
-    msg_scene.world.collision_objects[0].networks.resize(1);
-    msg_scene.world.collision_objects[0].networks[0].config.data = to_string(config);
-    std::vector<float> params_cpu(network->n_params());
-    cudaMemcpy(params_cpu.data(), params, network->n_params() * sizeof(float), cudaMemcpyDeviceToHost);
-    msg_scene.world.collision_objects[0].networks[0].weights.data = params_cpu;
-    msg_scene.world.collision_objects[0].networks[0].aabb.resize(3);
-    msg_scene.world.collision_objects[0].networks[0].aabb[0] = 1;
-    msg_scene.world.collision_objects[0].networks[0].aabb[1] = 1;
-    msg_scene.world.collision_objects[0].networks[0].aabb[2] = 1;
-
-    for (int i = 0; i < 20; i++) {
-        planning_scene_diff_publisher->publish(msg_scene);
     }
 
     cudaStreamDestroy(*stream_ptr);
