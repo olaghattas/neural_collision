@@ -229,6 +229,7 @@ int main(int argc, char *argv[]) {
             auto network = tcnn::cpp::create_network_with_input_encoding(n_input_dims, n_output_dims, encoding_config,
                                                                          network_config);
             float *params = trainable_model->params();
+
             predict(stream_ptr, network, params, features_gpu, pred_targets_gpu);
             auto pred_targets = pred_targets_gpu.toCPU();
             publish_pointcloud(features, pred_targets, node, pub_);
@@ -236,6 +237,20 @@ int main(int argc, char *argv[]) {
         }
     }
 
+//    auto txt_file_path = pkg_dir / "config" / "data.txt";
+//    std::ofstream outputFile(txt_file_path); // Open the file for writing
+//
+//    if (outputFile.is_open()) {
+//        outputFile <<   << std::endl; // Write data to the file
+//        outputFile << "This is a sample text." << std::endl;
+//
+//        outputFile.close(); // Close the file
+//        std::cout << "Data saved successfully." << std::endl;
+//    } else {
+//        std::cout << "Failed to open the file." << std::endl;
+//    }
+
+    return 0;
     auto network = trainable_model->get_network();
     float *params = trainable_model->params();
     for (int i = 0; i < 20; i++) {

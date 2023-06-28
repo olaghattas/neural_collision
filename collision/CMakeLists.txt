@@ -13,7 +13,7 @@ endif()
 find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(sensor_msgs REQUIRED)
-
+find_package(ament_index_cpp REQUIRED)
 
 find_package(fcl REQUIRED)
 find_package(CUDA REQUIRED)
@@ -22,16 +22,18 @@ find_package(ros2-tiny-cuda-nn REQUIRED)
 set(dependencies
         rclcpp
         sensor_msgs
+        ament_index_cpp
         )
 add_executable(main src/main.cpp)
 ament_target_dependencies(main ${dependencies})
 
 target_link_libraries(main ${FCL_LIBRARIES})
 target_link_libraries(main ${ros2-tiny-cuda-nn_LIBRARIES})
-target_include_directories(main PUBLIC ${EIGEN3_INCLUDE_DIR})
-target_include_directories(main PUBLIC ${EIGEN3_INCLUDE_DIR})
+target_include_directories(main PUBLIC ${EIGEN3_INCLUDE_DIRS})
+target_include_directories(main PUBLIC ${EIGEN3_INCLUDE_DIRS})
 target_include_directories(main PUBLIC ${CUDA_INCLUDE_DIRS})
 target_include_directories(main PUBLIC ${ros2-tiny-cuda-nn_INCLUDE_DIR})
+
 
 target_include_directories(main PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
