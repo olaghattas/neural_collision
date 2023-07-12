@@ -29,7 +29,6 @@
 
 #include <sensor_msgs/msg/point_cloud2.hpp>
 
-
 struct GPUData {
     GPUData(std::vector<float> data, int dim) {
         size_ = data.size();
@@ -83,9 +82,10 @@ struct GPUData {
     int stride_;
 };
 
-
 void predict(cudaStream_t const *stream_ptr, tcnn::cpp::Module *network,
              float *params, const GPUData &inputs, GPUData &output);
+
+void readMemoryData(std::vector<int>& data, int size);
 
 void publish_pointcloud(const std::vector<float> &features,
                         const std::vector<float> &pred_targets, std::shared_ptr<rclcpp::Node> &node,
@@ -237,20 +237,6 @@ int main(int argc, char *argv[]) {
         }
     }
 
-//    auto txt_file_path = pkg_dir / "config" / "data.txt";
-//    std::ofstream outputFile(txt_file_path); // Open the file for writing
-//
-//    if (outputFile.is_open()) {
-//        outputFile <<   << std::endl; // Write data to the file
-//        outputFile << "This is a sample text." << std::endl;
-//
-//        outputFile.close(); // Close the file
-//        std::cout << "Data saved successfully." << std::endl;
-//    } else {
-//        std::cout << "Failed to open the file." << std::endl;
-//    }
-
-    return 0;
     auto network = trainable_model->get_network();
     float *params = trainable_model->params();
     for (int i = 0; i < 20; i++) {
