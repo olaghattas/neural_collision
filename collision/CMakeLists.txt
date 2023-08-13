@@ -39,20 +39,20 @@ target_include_directories(main PUBLIC
 
 install(TARGETS main DESTINATION lib/${PROJECT_NAME})
 
-add_library(get_collision SHARED ../collision_lib/src/collision_lib.cpp)
-ament_target_dependencies(get_collision ${dependencies})
+#add_library(get_collision SHARED ../collision_lib/src/collision_lib.cpp)
+#ament_target_dependencies(get_collision ${dependencies})
 
-#target_link_libraries(get_collision ${FCL_LIBRARIES})
-target_link_libraries(get_collision ${ros2-tiny-cuda-nn_LIBRARIES})
-target_include_directories(get_collision PUBLIC ${EIGEN3_INCLUDE_DIRS})
-target_include_directories(get_collision PUBLIC ${CUDA_INCLUDE_DIRS})
-target_include_directories(get_collision PUBLIC ${ros2-tiny-cuda-nn_INCLUDE_DIR})
+##target_link_libraries(get_collision ${FCL_LIBRARIES})
+#target_link_libraries(get_collision ${ros2-tiny-cuda-nn_LIBRARIES})
+#target_include_directories(get_collision PUBLIC ${EIGEN3_INCLUDE_DIRS})
+#target_include_directories(get_collision PUBLIC ${CUDA_INCLUDE_DIRS})
+#target_include_directories(get_collision PUBLIC ${ros2-tiny-cuda-nn_INCLUDE_DIR})
+#
+#target_include_directories(get_collision PUBLIC
+#        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+#        $<INSTALL_INTERFACE:include>)
 
-target_include_directories(get_collision PUBLIC
-        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
-        $<INSTALL_INTERFACE:include>)
-
-install(TARGETS get_collision DESTINATION lib/${PROJECT_NAME})
+#install(TARGETS get_collision DESTINATION lib/${PROJECT_NAME})
 
 install(
     DIRECTORY config
