@@ -57,6 +57,12 @@ install(
         ARCHIVE DESTINATION lib
         RUNTIME DESTINATION bin)
 
+install(
+        DIRECTORY config
+        DESTINATION share/${PROJECT_NAME}
+
+)
+
 ament_export_targets(collision_libTargets HAS_LIBRARY_TARGET)
 ament_export_dependencies(
         ament_index_cpp
