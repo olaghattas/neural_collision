@@ -6,7 +6,9 @@
 
 #include <collision_lib/collision_lib.hpp>
 
-//void readMemoryData(std::vector<int>& data, int size);
+#include <cuda_runtime.h>  // Add this line to include the CUDA runtime header
+#include <iostream>
+
 
 void predict(cudaStream_t const *stream_ptr, tcnn::cpp::Module *network,
              float *params, const GPUData &inputs, GPUData &output) {
@@ -33,31 +35,39 @@ DataStore read_data_from_path(std::string directoryPath ) {
     if (directory) {
         while ((entry = readdir(directory)) != nullptr) {
             if (entry->d_type == DT_REG) {
+                try {
+                    std::ifstream file(directoryPath + entry->d_name);
+                    std::string filename = directoryPath + entry->d_name; // Get the filename
+                    std::cout << "File name: " << filename << std::endl; // Print file content
 
-                std::ifstream file(directoryPath + entry->d_name);
+                    nlohmann::json jsonData;
+//                file >> jsonData;
 
-                nlohmann::json jsonData;
-                file >> jsonData;
-                file.close();
+//                    std::string fileContent((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
+//                    std::cout << "File Content: " << fileContent << std::endl; // Print file content
 
+                    jsonData = nlohmann::json::parse(file);
+                    file.close();
 
-                for (const auto &entry: jsonData) {
-                    DataPoint item;
-                    item.x = entry["posX"];
-                    item.y = entry["posY"];
-                    item.z = entry["posZ"];
-                    item.collision = entry["collision"];
-                    if (entry["name_collision"] == "door") {
-                        item.door_collision = true;
-                    } else {
-                        item.door_collision = false;
+                    for (const auto &entry: jsonData) {
+                        DataPoint item;
+                        item.x = entry["posX"];
+                        item.y = entry["posY"];
+                        item.z = entry["posZ"];
+                        item.collision = entry["collision"];
+                        if (entry["name_collision"] == "door") {
+                            item.door_collision = true;
+                        } else {
+                            item.door_collision = false;
+                        }
+                        data.push_back(item);
                     }
-                    data.push_back(item);
+                } catch (const nlohmann::json::parse_error &e) {
+                    std::cerr << "Parsing error: " << e.what() << std::endl;
                 }
             }
         }
     }
-
     std::cout << "Size of data: " << data.size() << std::endl;
     return {data.begin(), data.begin() + 128 * (data.size() / 128)};
 }
@@ -76,7 +86,92 @@ void write_data(const std::vector<DataPoint> &data) {
     }
 }
 
-std::vector<float> check_collision( std::vector<float> features_inf, std::vector<float> targets_inf , std::string directoryPath){
+tcnn::cpp::Module* check_collision_training(std::string directoryPath){
+    // load data
+    auto data = read_data_from_path(directoryPath);
+
+    std::vector<float> features(3 * data.size());
+    std::vector<float> targets(2 * data.size());
+    for (int i = 0; i < data.size(); i++) {
+        auto &datpoint = data[i];
+        targets[2 * i + 0] = datpoint.collision;
+        targets[2 * i + 1] = datpoint.door_collision;
+        features[3 * i + 0] = datpoint.x;
+        features[3 * i + 1] = datpoint.y;
+        features[3 * i + 2] = datpoint.z;
+
+    }
+
+    GPUData features_gpu{features, 3};
+    GPUData targets_gpu{targets, 2};
+    GPUData pred_targets_gpu((int) 16 * targets.size(), 1);
+
+    // load config
+    std::filesystem::path pkg_dir = ament_index_cpp::get_package_share_directory("collision_lib");
+    auto json_file_path = pkg_dir / "config" / "config.json";
+    std::cout << "File name: " << json_file_path << std::endl; // Print file content
+
+    std::fstream file(json_file_path.string());
+    std::stringstream buffer;  // Create a stringstream to store the file contents
+    buffer << file.rdbuf();  // Read the file into the stringstream
+    std::string config_string = buffer.str(); // "{\"encoding\":{\"base_resolution\":16,\"log2_hashmap_size\":19,\"n_features_per_level\":2,\"n_levels\":16,\"otype\":\"HashGrid\",\"per_level_scale\":2.0},\"loss\":{\"otype\":\"L2\"},\"network\":{\"activation\":\"ReLU\",\"n_hidden_layers\":2,\"n_neurons\":64,\"otype\":\"FullyFusedMLP\",\"output_activation\":\"None\"},\"optimizer\":{\"learning_rate\":0.001,\"otype\":\"Adam\"}}";
+    nlohmann::json config = nlohmann::json::parse(config_string);
+
+    // load network and cuda
+    constexpr uint32_t n_input_dims = 3;
+    constexpr uint32_t n_output_dims = 1;
+    uint32_t batch_size = targets.size() / 2;
+
+    auto stream_ptr = new cudaStream_t();
+    cudaStreamCreate(stream_ptr);
+    auto trainable_model = tcnn::cpp::create_trainable_model(n_input_dims, n_output_dims, config);
+
+
+    for (int i = 0; i < 1; ++i) {
+        int ind = features_gpu.sampleInd(batch_size);
+        float *training_batch_inputs = features_gpu.sample(ind);
+        float *training_batch_targets = targets_gpu.sample(ind);
+
+        auto ctx = trainable_model->training_step(*stream_ptr, batch_size, training_batch_inputs,
+                                                  training_batch_targets);
+        if (0 == i % 100) {
+            float loss = trainable_model->loss(*stream_ptr, ctx);
+            std::cout << "iteration=" << i << " loss=" << loss << std::endl;
+            auto network_config = config.value("network", nlohmann::json::object());
+            auto encoding_config = config.value("encoding", nlohmann::json::object());
+            auto network = tcnn::cpp::create_network_with_input_encoding(n_input_dims, n_output_dims, encoding_config,
+                                                                         network_config);
+            float *params = trainable_model->params();
+
+        }
+    }
+
+    auto network = trainable_model->get_network();
+    auto size_ = network->n_params();
+    float *params = trainable_model->params();
+
+    std::vector<float> parameters(size_);
+
+
+
+    cudaMemcpy(parameters.data(), params, size_ * sizeof(float),cudaMemcpyDeviceToHost);
+
+    nlohmann::json jsonArray = parameters;
+
+    std::ofstream outputFile("/home/olagh/particle_filter/src/neural_collision/collision_lib/config/output.json");
+    if (outputFile.is_open()) {
+        outputFile << jsonArray.dump(4); // Pretty print with 4 spaces of indentation
+        outputFile.close();
+        std::cout << "JSON data saved to output.json" << std::endl;
+    } else {
+        std::cerr << "Unable to open output.json for writing" << std::endl;
+    }
+
+    cudaStreamDestroy(*stream_ptr);
+    return network;
+}
+
+std::vector<float> check_collision( std::vector<float> features_inf, std::string directoryPath){
     // load data
     auto data = read_data_from_path(directoryPath);
 
@@ -140,11 +235,36 @@ std::vector<float> check_collision( std::vector<float> features_inf, std::vector
     float *params = trainable_model->params();
 
     GPUData features_gpu_inf{features_inf, 3};
-    GPUData pred_targets_inf_gpu((int) 16 * targets_inf.size(), 1);
+    GPUData pred_targets_inf_gpu((int) 16 * targets.size(), 1);
 
 
     predict(stream_ptr, network, params, features_gpu_inf, pred_targets_inf_gpu);
-    auto pred_targets = pred_targets_gpu.toCPU();
+    auto pred_targets = pred_targets_inf_gpu.toCPU();
+
+    cudaStreamDestroy(*stream_ptr);
+
+    return pred_targets;
+}
+
+std::vector<float> check_collision_inf( std::vector<float> features_inf, std::vector<float> targets_inf,tcnn::cpp::Module* network_ , std::vector<float> CPU_prams){
+    // Inferencing
+
+    auto network = network_;
+    auto size_ = network->n_params();
+
+    float *params ;
+    cudaMalloc(&params, size_ * sizeof(float));
+    std::vector<float> cpuparams = CPU_prams;
+    cudaMemcpy(params, cpuparams.data(), size_ * sizeof(float), cudaMemcpyHostToDevice);
+
+    GPUData features_gpu_inf{features_inf, 3};
+    GPUData pred_targets_inf_gpu((int) 16 * targets_inf.size(), 1);
+
+    auto stream_ptr = new cudaStream_t();
+    cudaStreamCreate(stream_ptr);
+
+    predict(stream_ptr, network, params, features_gpu_inf, pred_targets_inf_gpu);
+    auto pred_targets = pred_targets_inf_gpu.toCPU();
 
     cudaStreamDestroy(*stream_ptr);
 

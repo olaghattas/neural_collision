@@ -78,6 +78,10 @@ void readMemoryData(std::vector<int>& data, int size);
 
 std::vector<float> check_collision(std::vector<float> features_inf, std::vector<float> targets_inf, std::string directoryPath);
 
+tcnn::cpp::Module* check_collision_training(std::string directoryPath);
+
+std::vector<float> check_collision_inf( std::vector<float> features_inf, std::vector<float> targets_inf,tcnn::cpp::Module* network_ , std::vector<float> CPU_prams);
+
 std::vector<float> door_collision(std::vector<float> features_inf, std::vector<float> targets_inf, std::string directoryPath);
 
 struct DataPoint {
