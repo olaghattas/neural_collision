@@ -86,7 +86,7 @@ void write_data(const std::vector<DataPoint> &data) {
     }
 }
 
-tcnn::cpp::Module* check_collision_training(std::vector<float> features_inf, std::string directoryPath){
+tcnn::cpp::Module* check_collision_training(std::string directoryPath){
     // load data
     auto data = read_data_from_path(directoryPath);
 
