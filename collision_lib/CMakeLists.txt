@@ -11,12 +11,19 @@ find_package(ament_index_cpp REQUIRED)
 find_package(Eigen3 REQUIRED)
 find_package(CUDA REQUIRED)
 find_package(ros2-tiny-cuda-nn REQUIRED)
+
+find_package(rclcpp REQUIRED)
+find_package(visualization_msgs REQUIRED)
+find_package(sensor_msgs REQUIRED)
 # uncomment the following section in order to fill in
 # further dependencies manually.
 # find_package(<dependency> REQUIRED)
 set(dependencies
         ament_index_cpp
-        )
+        rclcpp
+        visualization_msgs
+        sensor_msgs
+)
 
 add_library(collision_lib src/collision_lib.cpp)
 target_link_libraries(collision_lib
