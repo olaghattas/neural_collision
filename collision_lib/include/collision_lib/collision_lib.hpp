@@ -22,20 +22,23 @@
 #include <sensor_msgs/msg/point_cloud2.hpp>
 
 struct GPUData {
-    GPUData(std::vector<float> data, int dim) {
+
+    GPUData(std::vector<float> data, int dim, int stride = 1) {
         size_ = data.size();
-        stride_ = 1;
+        stride_ = stride;
         dim_ = dim;
+//        num_elements_in_stride_ = num_elements_in_stride;
         cudaMalloc(&data_gpu_, size_ * sizeof(float));
         cudaMemcpy(data_gpu_, data.data(), size_ * sizeof(float), cudaMemcpyHostToDevice);
 
         std::srand(static_cast<unsigned>(std::time(nullptr)));
     }
 
-    GPUData(int size, int dim) {
+    GPUData(int size, int dim,  int stride = 1) {
         size_ = size;
-        stride_ = 1;
+        stride_ = stride;
         dim_ = dim;
+//        num_elements_in_stride_ = num_elements_in_stride;
         cudaMalloc(&data_gpu_, size_ * sizeof(float));
     }
 
@@ -53,15 +56,17 @@ struct GPUData {
         return (float *) (data_gpu_ + offset * dim_);
     }
 
-    std::vector<float> toCPU() {
-        std::vector<float> out(size_ / stride_);
+    std::vector<float> toCPU(int num_elements_in_stride) {
+        num_elements_in_stride_ = num_elements_in_stride;
+        std::vector<float> out(size_ * num_elements_in_stride_ / stride_);
         if (stride_ == 1) {
             cudaMemcpy(out.data(), data_gpu_, size_ * sizeof(float), cudaMemcpyDeviceToHost);
         } else {
             std::vector<float> buf(size_);
             cudaMemcpy(buf.data(), data_gpu_, size_ * sizeof(float), cudaMemcpyDeviceToHost);
             for (int i = 0; i < size_ / stride_; i++) {
-                out[i] = buf[stride_ * i];
+                for (int j = 0; j < num_elements_in_stride_; j++)
+                    out[i * num_elements_in_stride_  + j] = buf[stride_ * i + j];
             }
         }
 
@@ -72,6 +77,7 @@ struct GPUData {
     int size_;
     int dim_;
     int stride_;
+    int num_elements_in_stride_;
 };
 
 void predict(cudaStream_t const *stream_ptr, tcnn::cpp::Module *network,
@@ -82,10 +88,13 @@ void readMemoryData(std::vector<int>& data, int size);
 std::vector<float> check_collision(std::string directoryPath, std::shared_ptr<rclcpp::Node> &node,
                                    std::shared_ptr<rclcpp::Publisher<sensor_msgs::msg::PointCloud2>> &pub_);
 
-tcnn::cpp::Module* check_collision_training(std::string directoryPath);
+tcnn::cpp::Module *check_collision_training(std::string directoryPath, int num_features_);
 
-std::vector<float> check_collision_inf( std::vector<float> features_inf, std::vector<float> targets_inf,tcnn::cpp::Module* network_ , std::vector<float> CPU_prams);
-
+std::vector<float>
+check_collision_inf(std::vector<float> features_inf, std::vector<float> targets_inf, int num_targets, int num_features, tcnn::cpp::Module *network_,
+                    std::vector<float> CPU_prams);
+//                    std::shared_ptr<rclcpp::Node> &node,
+//                    std::shared_ptr<rclcpp::Publisher<sensor_msgs::msg::PointCloud2>> &pub_);
 
 struct DataPoint {
     float x = 0;
