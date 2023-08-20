@@ -1,0 +1,4 @@
+source;share/collision_lib/local_setup.bash
+source;share/collision_lib/local_setup.dsv
+source;share/collision_lib/local_setup.sh
+source;share/collision_lib/local_setup.zsh

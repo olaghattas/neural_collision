@@ -18,21 +18,27 @@
 #include <iostream>
 #include <dirent.h>
 
+#include "rclcpp/rclcpp.hpp"
+#include <sensor_msgs/msg/point_cloud2.hpp>
+
 struct GPUData {
-    GPUData(std::vector<float> data, int dim) {
+
+    GPUData(std::vector<float> data, int dim, int stride = 1) {
         size_ = data.size();
-        stride_ = 1;
+        stride_ = stride;
         dim_ = dim;
+//        num_elements_in_stride_ = num_elements_in_stride;
         cudaMalloc(&data_gpu_, size_ * sizeof(float));
         cudaMemcpy(data_gpu_, data.data(), size_ * sizeof(float), cudaMemcpyHostToDevice);
 
         std::srand(static_cast<unsigned>(std::time(nullptr)));
     }
 
-    GPUData(int size, int dim) {
+    GPUData(int size, int dim,  int stride = 1) {
         size_ = size;
-        stride_ = 1;
+        stride_ = stride;
         dim_ = dim;
+//        num_elements_in_stride_ = num_elements_in_stride;
         cudaMalloc(&data_gpu_, size_ * sizeof(float));
     }
 
@@ -41,7 +47,7 @@ struct GPUData {
     }
 
     int sampleInd(int num_elements) {
-        assert(size_ / dim_ - num_elements >= 0);
+//        assert(size_ / dim_ - num_elements >= 0);
         int offset = (std::rand() % (1 + size_ / dim_ - num_elements));
         return offset;
     }
@@ -50,15 +56,17 @@ struct GPUData {
         return (float *) (data_gpu_ + offset * dim_);
     }
 
-    std::vector<float> toCPU() {
-        std::vector<float> out(size_ / stride_);
+    std::vector<float> toCPU(int num_elements_in_stride) {
+        num_elements_in_stride_ = num_elements_in_stride;
+        std::vector<float> out(size_ * num_elements_in_stride_ / stride_);
         if (stride_ == 1) {
             cudaMemcpy(out.data(), data_gpu_, size_ * sizeof(float), cudaMemcpyDeviceToHost);
         } else {
             std::vector<float> buf(size_);
             cudaMemcpy(buf.data(), data_gpu_, size_ * sizeof(float), cudaMemcpyDeviceToHost);
             for (int i = 0; i < size_ / stride_; i++) {
-                out[i] = buf[stride_ * i];
+                for (int j = 0; j < num_elements_in_stride_; j++)
+                    out[i * num_elements_in_stride_  + j] = buf[stride_ * i + j];
             }
         }
 
@@ -69,6 +77,7 @@ struct GPUData {
     int size_;
     int dim_;
     int stride_;
+    int num_elements_in_stride_;
 };
 
 void predict(cudaStream_t const *stream_ptr, tcnn::cpp::Module *network,
@@ -76,50 +85,52 @@ void predict(cudaStream_t const *stream_ptr, tcnn::cpp::Module *network,
 
 void readMemoryData(std::vector<int>& data, int size);
 
-std::vector<float> check_collision(std::vector<float> features_inf, std::vector<float> targets_inf, std::string directoryPath);
+std::vector<float> check_collision(std::string directoryPath, std::shared_ptr<rclcpp::Node> &node,
+                                   std::shared_ptr<rclcpp::Publisher<sensor_msgs::msg::PointCloud2>> &pub_);
 
-tcnn::cpp::Module* check_collision_training(std::string directoryPath);
+tcnn::cpp::Module *check_collision_training(std::string directoryPath, int num_features_);
 
-std::vector<float> check_collision_inf( std::vector<float> features_inf, std::vector<float> targets_inf,tcnn::cpp::Module* network_ , std::vector<float> CPU_prams);
-
-std::vector<float> door_collision(std::vector<float> features_inf, std::vector<float> targets_inf, std::string directoryPath);
+std::vector<float>
+check_collision_inf(std::vector<float> features_inf, std::vector<float> targets_inf, int num_targets, int num_features, tcnn::cpp::Module *network_,
+                    std::vector<float> CPU_prams);
+//                    std::shared_ptr<rclcpp::Node> &node,
+//                    std::shared_ptr<rclcpp::Publisher<sensor_msgs::msg::PointCloud2>> &pub_);
 
 struct DataPoint {
     float x = 0;
     float y = 0;
     float z = 0;
-    bool collision = false;
-    bool door_collision = false;
+    float empty = 0;
+    float non_empty = 0;
 
-    // number of door depending on the number if doors in the house.
-    bool door1 = false;
-    bool door2 = false;
-    bool door3 = false;
+    float door1 = 0;
+    float door2 = 0;
+    float door3 = 0;
+    float door4 = 0;
 
     DataPoint() {}
 
-    DataPoint(float xIn, float yIn, float zIn, bool collisionIn, bool door_collisionIn) {
+    DataPoint(float xIn, float yIn, float zIn, float empty_, float non_empty_, float door1_, float door2_, float door3_, float door4_) {
         x = xIn;
         y = yIn;
         z = zIn;
-        collision = collisionIn;
-        door_collision = door_collisionIn;
+        float empty = empty_;
+        float non_empty = non_empty_;
+
+        float door1 = door1_;
+        float door2 = door2_;
+        float door3 = door3_;
+        float door4 = door4_;
     }
-    // switched order of xyz and doors so we dont have the same constructor in houses with only two doors
-    DataPoint(bool door1In, bool door2In, bool door3In, float xIn, float yIn, float zIn) {
-        x = xIn;
-        y = yIn;
-        z = zIn;
-        door1 = door1In;
-        door2 = door2In;
-        door3 = door3In;
-    }
+
 };
 
 typedef std::vector<DataPoint> DataStore;
 
 void write_data(const std::vector<DataPoint> &data);
-
+void publish_pointcloud(const std::vector<float> &features,
+                        const std::vector<float> &pred_targets, std::shared_ptr<rclcpp::Node> &node,
+                        std::shared_ptr<rclcpp::Publisher<sensor_msgs::msg::PointCloud2>> &pub_);
 DataStore read_data_from_path(std::string directoryPath );
 
 #endif // GET_COLLISION_HPP
