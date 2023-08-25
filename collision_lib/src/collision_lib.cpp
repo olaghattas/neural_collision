@@ -87,7 +87,7 @@ void write_data(const std::vector<DataPoint> &data) {
     }
 }
 
-tcnn::cpp::Module *check_collision_training(std::string directoryPath, int num_features_) {
+void check_collision_training(std::string directoryPath, int num_features_) {
     /// TODO: have the numb targets not be constant
     // load data
     auto data = read_data_from_path(directoryPath);
@@ -174,7 +174,7 @@ tcnn::cpp::Module *check_collision_training(std::string directoryPath, int num_f
 
     cudaStreamDestroy(*stream_ptr);
 
-    return network;
+    return;
 }
 
 std::vector<float> check_collision(std::string directoryPath, std::shared_ptr<rclcpp::Node> &node,
@@ -268,13 +268,32 @@ std::vector<float> check_collision(std::string directoryPath, std::shared_ptr<rc
 }
 
 std::vector<float>
-check_collision_inf(std::vector<float> features_inf, std::vector<float> targets_inf, int num_targets, int num_features,
-                    tcnn::cpp::Module *network_, std::vector<float> CPU_prams
+check_collision_inf(std::vector<float> features_inf, std::vector<float> targets_inf, int num_targets, int num_features, std::string path_network_config,
+//                    tcnn::cpp::Module *network_,
+                    std::vector<float> CPU_prams
 //                   , std::shared_ptr<rclcpp::Node> &node,
 //                    std::shared_ptr<rclcpp::Publisher<sensor_msgs::msg::PointCloud2>> &pub_
 ) {
     // Inferencing
-    auto network = network_;
+//    auto network = network_;
+    // load network and cuda
+    constexpr uint32_t n_input_dims = 3;
+    constexpr uint32_t n_output_dims = 6;
+    // load config
+//    std::filesystem::path pkg_dir = ament_index_cpp::get_package_share_directory("collision_lib");
+//    auto json_file_path = pkg_dir / "config" / "config.json";
+    std::cout << "File name: " << path_network_config << std::endl; // Print file content
+
+    std::fstream file(path_network_config);
+    std::stringstream buffer;  // Create a stringstream to store the file contents
+    buffer << file.rdbuf();  // Read the file into the stringstream
+    std::string config_string = buffer.str(); // "{\"encoding\":{\"base_resolution\":16,\"log2_hashmap_size\":19,\"n_features_per_level\":2,\"n_levels\":16,\"otype\":\"HashGrid\",\"per_level_scale\":2.0},\"loss\":{\"otype\":\"L2\"},\"network\":{\"activation\":\"ReLU\",\"n_hidden_layers\":2,\"n_neurons\":64,\"otype\":\"FullyFusedMLP\",\"output_activation\":\"None\"},\"optimizer\":{\"learning_rate\":0.001,\"otype\":\"Adam\"}}";
+    nlohmann::json config = nlohmann::json::parse(config_string);
+
+
+    auto network_config = config.value("network", nlohmann::json::object());
+    auto encoding_config = config.value("encoding", nlohmann::json::object());
+    auto network = tcnn::cpp::create_network_with_input_encoding(n_input_dims, n_output_dims, encoding_config, network_config);
     auto size_ = network->n_params();
 
     float *params;
@@ -358,7 +377,7 @@ void publish_pointcloud(const std::vector<float> &features,
 
         if (pred_targets[i * num_targets] > .5) {
             // empty color blue
-            color[2] = 255;
+            color[3] = 0;
         } else {
             //    color[1] = 255;
             if (pred_targets[i * num_targets + 2] > 0.5) {

@@ -88,11 +88,12 @@ void readMemoryData(std::vector<int>& data, int size);
 std::vector<float> check_collision(std::string directoryPath, std::shared_ptr<rclcpp::Node> &node,
                                    std::shared_ptr<rclcpp::Publisher<sensor_msgs::msg::PointCloud2>> &pub_);
 
-tcnn::cpp::Module *check_collision_training(std::string directoryPath, int num_features_);
+void check_collision_training(std::string directoryPath, int num_features_);
 
 std::vector<float>
-check_collision_inf(std::vector<float> features_inf, std::vector<float> targets_inf, int num_targets, int num_features, tcnn::cpp::Module *network_,
+check_collision_inf(std::vector<float> features_inf, std::vector<float> targets_inf, int num_targets, int num_features, std::string path_network_config,
                     std::vector<float> CPU_prams);
+//, tcnn::cpp::Module *network_,
 //                    std::shared_ptr<rclcpp::Node> &node,
 //                    std::shared_ptr<rclcpp::Publisher<sensor_msgs::msg::PointCloud2>> &pub_);
 
