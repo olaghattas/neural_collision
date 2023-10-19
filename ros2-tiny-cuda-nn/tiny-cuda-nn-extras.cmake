@@ -1,4 +1,3 @@
-
 find_package(tiny-cuda-nn REQUIRED)
 find_package(FMT REQUIRED)
 set(ros2-tiny-cuda-nn_LIBRARIES ${tiny-cuda-nn_LIBRARIES})

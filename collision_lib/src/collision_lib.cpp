@@ -37,7 +37,7 @@ DataStore read_data_from_path(std::string directoryPath) {
                 try {
                     std::ifstream file(directoryPath + entry->d_name);
                     std::string filename = directoryPath + entry->d_name; // Get the filename
-                    std::cout << "File name: " << filename << std::endl; // Print file content
+//                    std::cout << "File name: " << filename << std::endl; // Print file content
 
                     nlohmann::json jsonData;
 
@@ -282,7 +282,7 @@ check_collision_inf(std::vector<float> features_inf, std::vector<float> targets_
     // load config
 //    std::filesystem::path pkg_dir = ament_index_cpp::get_package_share_directory("collision_lib");
 //    auto json_file_path = pkg_dir / "config" / "config.json";
-    std::cout << "File name: " << path_network_config << std::endl; // Print file content
+//    std::cout << "File name: " << path_network_config << std::endl; // Print file content
 
     std::fstream file(path_network_config);
     std::stringstream buffer;  // Create a stringstream to store the file contents
